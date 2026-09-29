@@ -1,0 +1,7 @@
+# ORBIT is an internal internship platform. Only the public application form is
+# meant to be discoverable; everything else sits behind a sign-in and would only
+# ever serve crawlers the app shell.
+User-agent: *
+Allow: /$
+Allow: /apply
+Disallow: /

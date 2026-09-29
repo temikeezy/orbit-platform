@@ -1,0 +1,84 @@
+name: E2E Tests
+
+# PR-gated, not nightly.
+#
+# This job ran on a 2am cron and was failing in global setup EVERY night —
+# ORBIT_TEST_MCP_SECRET was never passed, so it threw before opening a browser —
+# and nobody noticed for months. That is the argument against scheduled test
+# runs in one data point: a red build nobody is waiting on is not a safety net,
+# it is a cron job burning minutes. Run it where someone is watching and where
+# it can actually block a bad merge.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# These specs run against the SHARED dev Convex deployment. They create users,
+# streams, tasks and applications, and several of those fixtures have no delete
+# at all. Two runs at once corrupt each other's data and collide on the MCP
+# session cap (five, evict-oldest), so runs are serialised globally rather than
+# per-branch — concurrent PRs would otherwise collide exactly as concurrent
+# cron and dispatch runs used to. `cancel-in-progress: false` because killing a
+# run mid-flight skips global teardown and leaks fixture users.
+# Neither workflow writes to the repo: they typecheck, lint, test and run
+# Playwright. Drop the default token grant to read-only so a compromised
+# third-party action cannot push or tamper.
+permissions:
+  contents: read
+
+concurrency:
+  group: orbit-e2e-dev
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: Playwright E2E
+    # Needs a live dev deployment and its MCP secret, which only IIH's own
+    # repository has. Elsewhere (the public repo, forks) it is skipped, not red.
+    if: ${{ github.repository == 'temikeezy/orbit' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # Exactly two variables are read by the harness, and grep over e2e/ finds
+      # no others. This job previously passed six that nothing reads —
+      # VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY (Supabase is gone) and four
+      # TEST_*_EMAIL/PASSWORD pairs (the harness mints fresh actors per run) —
+      # while omitting the one global-setup.ts hard-requires.
+      #
+      # ORBIT_TEST_MCP_SECRET is the dev deployment's MCP_SERVER_SECRET.
+      - name: Run E2E tests
+        run: npm run test:e2e
+        env:
+          E2E_CONVEX_URL: ${{ secrets.E2E_CONVEX_URL }}
+          ORBIT_TEST_MCP_SECRET: ${{ secrets.ORBIT_TEST_MCP_SECRET }}
+
+      # `always()`, not `failure()`: the report of a passing run is how timings
+      # and flake trends get read, and test-results/ carries the traces and
+      # videos that were being discarded entirely.
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

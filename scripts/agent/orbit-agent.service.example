@@ -1,0 +1,23 @@
+# systemd user service for one ORBIT agent cycle (Linux).
+# Install:
+#   mkdir -p ~/.config/systemd/user ~/.local/state/orbit-agent
+#   cp orbit-agent.service.example ~/.config/systemd/user/orbit-agent.service
+#   cp orbit-agent.timer.example   ~/.config/systemd/user/orbit-agent.timer
+#   (edit REPLACE_WITH_* below)
+#   systemctl --user daemon-reload && systemctl --user enable --now orbit-agent.timer
+#   loginctl enable-linger $USER    # keep running when logged out
+# cycle.sh is a zsh script: install zsh (apt install zsh / dnf install zsh).
+[Unit]
+Description=ORBIT agent cycle (assess, admissions, logbook, tasks, support, backup)
+
+[Service]
+Type=oneshot
+WorkingDirectory=REPLACE_WITH_REPO_PATH
+# systemd gives a minimal PATH: include node/npx, claude and codex.
+Environment=PATH=REPLACE_WITH_NODE_BIN_DIR:/usr/local/bin:/usr/bin:/bin
+Environment=ORBIT_AGENT_BATCH=12
+Environment=ORBIT_AGENT_LOG_DIR=%h/.local/state/orbit-agent
+Environment=ORBIT_BACKUP_DIR=REPLACE_WITH_BACKUP_DIR_ON_ENCRYPTED_VOLUME
+ExecStart=/usr/bin/env zsh REPLACE_WITH_REPO_PATH/scripts/agent/cycle.sh
+# A cycle lasts tens of minutes.
+TimeoutStartSec=4h

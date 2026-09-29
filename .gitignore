@@ -1,0 +1,59 @@
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.env
+
+# Local Netlify folder
+.netlify
+
+# Credential/secret files — never commit these
+ADMIN_CREDENTIALS.md
+*CREDENTIALS*.md
+*credentials*.md
+*.secrets
+.env.local
+.env.*.local
+supabase/.temp/
+coverage/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# convex/_generated is deliberately COMMITTED, not ignored: a fresh clone can then
+# typecheck and build without running codegen first. (The old reason given here --
+# that this machine's Convex CLI could not authenticate non-interactively -- was a
+# stale CONVEX_DEPLOY_KEY in the shell profile and is resolved; see
+# docs/CONVEX_MIGRATION.md. Codegen runs fine locally.)
+
+# Playwright: fixture sessions contain live tokens
+e2e/.auth/
+test-results/
+playwright-report/
+
+# Playwright visual capture output — regenerate with `npm run capture`.
+e2e/capture/output/
+e2e/capture/output.full/
+e2e/capture/gallery*.html
+scripts/agent/__pycache__/
+
+# Real names the manual-screenshot tripwire checks for (never commit)
+e2e/capture/real-names.local.txt

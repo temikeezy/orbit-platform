@@ -1,0 +1,108 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# No Netlify functions remain. All four are Convex now:
+#   orbit-application          -> httpAction  POST /applications/submit
+#   process-email-queue        -> cron        email.processQueue, every 2 minutes
+#   deadline-reminder          -> cron        scheduled.sendDeadlineReminders, hourly
+#   populate-weekly-leaderboard-> cron        scheduled.populateWeeklyLeaderboard, Mondays
+# The crons call the functions directly, so the shim that curled an edge function
+# from a scheduled function is gone with them.
+
+# Security headers applied to all responses
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), display-capture=(), browsing-topics=()"
+    # script-src dropped 'unsafe-inline' and jsdelivr: the built dist/index.html
+    # ships zero inline scripts and nothing in the repo loads from jsdelivr, so
+    # both were pure attack surface with nothing depending on them.
+    #
+    # style-src KEEPS 'unsafe-inline' — react-hot-toast/goober injects a
+    # runtime <style> element for its own styling, and the app uses inline
+    # style={{}} throughout. Removing it breaks the UI; do not remove it
+    # without replacing both of those first.
+    #
+    # connect-src gained the Sentry ingest hosts (regional routing means the
+    # DSN can land on any of them) so a configured VITE_SENTRY_DSN is not
+    # silently blocked by the same CSP that is supposed to make monitoring
+    # trustworthy.
+    #
+    # frame-src 'none' and form-action 'self' added: nothing in the app frames
+    # third-party content, and Zoho SSO is a window.location assignment in
+    # LoginPage.tsx, not a form POST, so there is no legitimate cross-origin
+    # form submission to allow.
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.convex.cloud https://*.convex.site https://ilorininnovationhub.com; connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://*.convex.site https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';"
+
+# Application intake. The form still POSTs to the old Netlify function path —
+# rewritten (200, not 302) so the browser never sees a cross-origin request and
+# the CSP connect-src stays same-origin. The function itself is gone; this is the
+# Convex httpAction.
+# NOTE: there is no redirect for the application intake.
+#
+# There WAS one, from `/.netlify/functions/orbit-application`, added when that
+# Netlify function was replaced by a Convex httpAction. Netlify rejects any
+# redirect whose `from` starts with `/.netlify` — "path field must not start
+# with /.netlify" — so the rule silently never loaded and the public form
+# posted to a function that had been deleted. ApplicationPage now posts to the
+# Convex endpoint directly; it sets `Access-Control-Allow-Origin: *` because the
+# same form is served from the marketing site.
+
+# Calendar feeds live in people's calendar clients forever, so this path cannot
+# change. Now points at the Convex httpAction rather than the Supabase edge
+# function.
+#
+# PER CONTEXT, because netlify.toml itself is context-independent. The bare rule
+# below applies to every build, so a deploy preview or branch deploy — whose
+# VITE_CONVEX_URL points at the dev deployment — proxied its calendar requests to
+# PRODUCTION. Testing a calendar change on a preview URL showed live prod data
+# and read as "my change did nothing". The production block is stated explicitly
+# rather than relying on the default so the pairing is visible.
+[[redirects]]
+  from = "/api/calendar-ics"
+  to = "https://your-prod-deployment.eu-west-1.convex.site/calendar.ics"
+  status = 200
+  force = true
+
+[[context.production.redirects]]
+  from = "/api/calendar-ics"
+  to = "https://your-prod-deployment.eu-west-1.convex.site/calendar.ics"
+  status = 200
+  force = true
+
+[[context.deploy-preview.redirects]]
+  from = "/api/calendar-ics"
+  to = "https://your-dev-deployment.eu-west-1.convex.site/calendar.ics"
+  status = 200
+  force = true
+
+[[context.branch-deploy.redirects]]
+  from = "/api/calendar-ics"
+  to = "https://your-dev-deployment.eu-west-1.convex.site/calendar.ics"
+  status = 200
+  force = true
+
+# NOTE: the catch-all /api/* proxy to Supabase edge functions is deliberately
+# gone. Every function it reached has a Convex counterpart, and leaving a
+# wildcard proxy to a Supabase project this app no longer authenticates against
+# would keep the old surface reachable after cutover.
+
+# Immutable cache for hashed build assets
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# SPA fallback — must be last
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

@@ -1,0 +1,56 @@
+{
+  "generatedFrom": "docs/manual/content.py (docs/manual/publish.py)",
+  "roles": {
+    "admin": {
+      "label": "Admin",
+      "title": "Running ORBIT — Admin",
+      "file": "/manuals/orbit-admin-manual.pdf",
+      "html": "/manuals/orbit-admin-manual.html",
+      "sections": [
+        "How ORBIT runs itself",
+        "Signing in and what you can see",
+        "Admissions: reading and approving applications",
+        "Acceptance letters",
+        "Placement and conversion",
+        "Streams and tasks",
+        "Reviewing submissions",
+        "Logbook and attendance sign-off",
+        "Users, accounts and settings",
+        "Task proposals: work the agent drafts",
+        "Email: logs, holds, and why nothing arrived",
+        "Settings",
+        "Keeping an eye on the agent"
+      ]
+    },
+    "moderator": {
+      "label": "Supervisor",
+      "title": "Running ORBIT — Supervisor",
+      "file": "/manuals/orbit-supervisor-manual.pdf",
+      "html": "/manuals/orbit-supervisor-manual.html",
+      "sections": [
+        "How ORBIT runs itself",
+        "Signing in and what you can see",
+        "Streams and tasks",
+        "Reviewing submissions",
+        "Logbook and attendance sign-off",
+        "Task proposals: work the agent drafts"
+      ]
+    },
+    "intern": {
+      "label": "Intern",
+      "title": "Your ORBIT handbook",
+      "file": "/manuals/orbit-intern-manual.pdf",
+      "html": "/manuals/orbit-intern-manual.html",
+      "sections": [
+        "Getting started",
+        "Your weekly tasks",
+        "Handing in your work",
+        "How your work is marked",
+        "Points, levels and badges",
+        "Your logbook",
+        "Getting help",
+        "Your profile and settings"
+      ]
+    }
+  }
+}

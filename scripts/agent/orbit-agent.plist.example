@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Portable launchd template for the ORBIT agent runner (macOS).
+  Copy to ~/Library/LaunchAgents/<label>.plist, replace every REPLACE_WITH_*
+  placeholder, then:  launchctl load ~/Library/LaunchAgents/<label>.plist
+  See scripts/agent/README.md.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.example.orbit-agent</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/zsh</string>
+		<string>-lc</string>
+		<string>REPLACE_WITH_REPO_PATH/scripts/agent/cycle.sh</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>REPLACE_WITH_REPO_PATH</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<!-- Must include the directory holding node/npx, claude and codex
+		     (Homebrew, fnm, nvm...). launchd provides no PATH of its own. -->
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+		<key>ORBIT_AGENT_BATCH</key>
+		<string>12</string>
+		<!-- Optional overrides (defaults in scripts/agent/README.md):
+		<key>ORBIT_AGENT_LOG_DIR</key>
+		<string>REPLACE_WITH_LOG_DIR</string>
+		<key>ORBIT_BACKUP_DIR</key>
+		<string>REPLACE_WITH_BACKUP_DIR</string>
+		-->
+	</dict>
+	<!-- Every 8 hours. The batch size is the blast radius of a bad pass; see
+	     the comments in cycle.sh before raising it. -->
+	<key>StartInterval</key>
+	<integer>28800</integer>
+	<key>RunAtLoad</key>
+	<false/>
+	<!-- The log directory must exist before load: mkdir -p REPLACE_WITH_LOG_DIR -->
+	<key>StandardOutPath</key>
+	<string>REPLACE_WITH_LOG_DIR/cycle.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>REPLACE_WITH_LOG_DIR/cycle.err.log</string>
+</dict>
+</plist>

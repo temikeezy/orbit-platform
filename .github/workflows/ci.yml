@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# VITE_CONVEX_URL is required at JOB level, not step level. Three things read it:
+# src/lib/convex.ts throws at module load without it (so `npm run test` fails
+# before a single test runs), the build-time guard in vite.config.ts fails the
+# build, and vite inlines it into the bundle. A Convex deployment URL is a public
+# endpoint, not a credential — this is the dev deployment, and the value is
+# already hardcoded as a fallback in playwright.config.ts.
+# SHARES A CONCURRENCY GROUP WITH e2e.yml, deliberately.
+#
+# Since the test step gained ORBIT_TEST_MCP_SECRET it runs the 156 live tests in
+# src/test/integration/ against the same shared dev deployment e2e.yml drives —
+# and both trigger on the same push, so they ran head-on. They create and delete
+# users in the same tables, which surfaced as
+# `OptimisticConcurrencyControlFailure` on `users` ("changed while this mutation
+# was being run and on every subsequent retry") in the live suite, and as
+# multi-second stalls in the browser suite while Convex retried the losing
+# mutation. Both also mint MCP sessions against a cap of five with
+# evict-oldest, so a busy pair can sign each other out.
+#
+# Same group name as e2e.yml means the two queue instead of colliding.
+# `cancel-in-progress: false` for the reason given there: killing a run
+# mid-flight skips teardown and leaks fixture users.
+# Neither workflow writes to the repo: they typecheck, lint, test and run
+# Playwright. Drop the default token grant to read-only so a compromised
+# third-party action cannot push or tamper.
+permissions:
+  contents: read
+
+concurrency:
+  group: orbit-e2e-dev
+  cancel-in-progress: false
+
+env:
+  VITE_CONVEX_URL: https://your-dev-deployment.eu-west-1.convex.cloud
+
+jobs:
+  ci:
+    name: Lint, Typecheck, Test & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # Covers src, e2e AND convex. Until tsconfig.convex.json existed, the
+      # backend's 30 modules were typechecked only by `convex deploy` on a
+      # developer's laptop.
+      #
+      # This step used to run as `npm run typecheck || true` with
+      # `continue-on-error: true` — suppressed twice over, so it could never
+      # fail the build. Both suppressions are gone deliberately. If this step
+      # is red, fix the types; do not put the escape hatch back.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Typecheck, tests AND an audit — not typecheck alone. mcp-server defines
+      # its own `test` script and src/tools/tasks.test.ts covers the
+      # agent-facing task write path; a step that only typechecks lets a
+      # behavioural regression there ship green with a test file sitting right
+      # next to it. Likewise the audit: mcp-server carries its own
+      # package-lock.json, which the root `npm audit` step below never walks,
+      # so advisories in it surface nowhere in the pipeline. The severity gate
+      # matches that root step exactly — blocking at critical, reporting at
+      # high — so the two lockfiles are held to the same bar.
+      - name: Typecheck, test & audit MCP server
+        run: |
+          npm --prefix mcp-server ci
+          npm --prefix mcp-server run typecheck
+          npm --prefix mcp-server test
+          npm --prefix mcp-server audit --audit-level=high || echo "::warning::high-severity advisories present in mcp-server — see the report above"
+          npm --prefix mcp-server audit --audit-level=critical
+
+      # The test step below cannot tell an empty secret from a present one:
+      # `describe.skipIf` turns the difference into a silent skip, not a
+      # failure (the next comment explains what that hides). So the presence
+      # check lives here, where it can be loud — if the repository secret is
+      # deleted, renamed or expired, this step goes red instead of the test
+      # step going green at ~403 tests with the 156-test live suite quietly
+      # absent from the run.
+      #
+      # Fork PRs are carved out deliberately: GitHub withholds repository
+      # secrets from fork-triggered workflows by design, so failing on
+      # emptiness there would leave every external contribution permanently
+      # red. A fork PR runs the reduced suite; the full suite runs once a
+      # maintainer pushes the branch.
+      #
+      # Only on IIH's own repository. The public open-source repository and its
+      # forks hold no dev deployment and no secret, so there the reduced suite
+      # is the whole suite — it must go green, not red, on a clean clone.
+      - name: Guard the live-suite secret
+        if: ${{ github.repository == 'temikeezy/orbit' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
+        env:
+          ORBIT_TEST_MCP_SECRET: ${{ secrets.ORBIT_TEST_MCP_SECRET }}
+        run: |
+          if [ -z "$ORBIT_TEST_MCP_SECRET" ]; then
+            echo "::error::ORBIT_TEST_MCP_SECRET is empty. The test step would still pass: describe.skipIf silently drops the live integration suite in src/test/integration/ — the 156 tests holding nearly all the negative-authorization coverage — and reports green on the ~403 that remain. Restore the repository secret; do not merge on a run without it."
+            exit 1
+          fi
+
+      # ORBIT_TEST_MCP_SECRET is what decides whether this step means anything.
+      #
+      # `describe.skipIf(!runnable)` in src/test/integration/convex-client-swap.test.ts
+      # gates 156 tests on it, and that file holds essentially ALL of the
+      # negative-authorization coverage — the ~40 `rejects.toThrow(/Admin|Moderator|
+      # Not a member/)` assertions that prove an intern is REFUSED, not merely that
+      # an admin is allowed. Convex has no row-level security, so those refusals are
+      # the only thing standing behind the function-level auth invariant in
+      # CLAUDE.md.
+      #
+      # Without it this step ran 403 tests and reported green; the 156 that skipped
+      # never showed up as skips in the summary line anyone reads. A PR deleting a
+      # `requireAdmin` call passed CI. It is the same secret e2e.yml already passes,
+      # so no new repository secret is needed.
+      - name: Unit & Component Tests
+        run: npm run test -- --coverage
+        env:
+          ORBIT_TEST_MCP_SECRET: ${{ secrets.ORBIT_TEST_MCP_SECRET }}
+
+      # The only step that exercises the PWA/workbox config, the Convex-URL
+      # build guard, and chunking. A green test suite has never proved the app
+      # builds.
+      - name: Build
+        run: npm run build
+
+      # Blocking at CRITICAL, reporting at high.
+      #
+      # This started as advisory because a blocking audit could not have passed:
+      # there were 27 advisories including 2 critical, and `xlsx` had none
+      # available on npm at all. That is fixed — SheetJS publishes the maintained
+      # build on its own registry, and the rest upgraded cleanly — so the gate
+      # can be real. There are 4 left, all ReDoS in glob matchers reached only by
+      # eslint walking our own paths, which is why the bar is critical and not
+      # high. Raise it when those clear; do not lower it.
+      - name: Dependency audit
+        run: |
+          npm audit --audit-level=high || echo "::warning::high-severity advisories present — see the report above"
+          npm audit --audit-level=critical
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7

@@ -1,0 +1,153 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-orbit-canvas text-orbit-ink antialiased;
+  }
+
+  body {
+    @apply bg-orbit-canvas font-sans text-orbit-ink;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display tracking-normal text-orbit-ink;
+  }
+
+  ::selection {
+    @apply bg-orbit-mint text-orbit-ink;
+  }
+
+  *:focus-visible {
+    @apply outline-none ring-2 ring-iih-green ring-offset-2;
+  }
+
+  button:focus-visible {
+    @apply outline-none ring-2 ring-iih-green ring-offset-2;
+  }
+
+  a:focus-visible {
+    @apply outline-none ring-2 ring-iih-green ring-offset-2 rounded;
+  }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply outline-none ring-2 ring-iih-green border-transparent;
+  }
+}
+
+@layer components {
+  .orbit-panel {
+    @apply rounded-lg border border-orbit-line bg-orbit-surface shadow-orbit-sm;
+  }
+
+  .orbit-panel-dark {
+    @apply rounded-lg border border-orbit-ink-soft bg-orbit-ink text-white shadow-orbit-md;
+  }
+
+  .orbit-input {
+    @apply w-full rounded-lg border border-orbit-line bg-white px-4 py-3 text-orbit-ink shadow-orbit-sm transition placeholder:text-orbit-muted/70 focus:border-iih-green focus:ring-2 focus:ring-iih-green/20;
+  }
+
+  .orbit-chip {
+    @apply rounded-full border border-orbit-line bg-orbit-subtle px-3 py-1 text-xs font-semibold text-orbit-graphite;
+  }
+
+  .orbit-data {
+    @apply font-mono text-orbit-ink;
+  }
+}
+
+/**
+ * Printed documents: SIWES acceptance letters, and the logbook export.
+ *
+ * Both views are portalled to <body> as siblings of #root rather than rendered
+ * in place, and both mark the body while open. A `position: fixed` overlay
+ * inside the app tree looks right on screen and prints wrong: the browser lays
+ * the fixed layer onto the first page and then prints the whole application
+ * underneath it, so a batch of letters came out as one letter followed by the
+ * admin dashboard. Hiding #root outright is the only reliable way to print a
+ * document from inside an SPA.
+ */
+@media print {
+  /*
+   * The default page: the logbook, and anything else printed from the app.
+   *
+   * A4 because that is what the logbook is filed on, and because leaving the
+   * size unset lets the browser pick — which in a US locale is Letter, a sheet
+   * 18mm shorter that silently reflows a document a university keeps.
+   */
+  @page {
+    size: A4;
+    margin: 20mm;
+  }
+
+  /*
+   * The letter's own page. A4.
+   *
+   * It was `size: letter` — 8.5in × 11in — copied faithfully from the source
+   * document's `w:sectPr` (pgSz 12240 × 15840 twips ÷ 1440). That was fidelity
+   * to the wrong thing: the .docx was authored in Word against a US default,
+   * and nobody who receives this letter uses US Letter paper. It is printed in
+   * Nigeria, on IIH letterhead, and filed by a university's Industrial Liaison
+   * Unit — A4 throughout. A4 is also what the logbook already uses, for the
+   * same reason, three rules above.
+   *
+   * The visible symptom of the old value was a letter that printed 18mm short
+   * on the page with the margins subtly off, on the one document in the system
+   * that an outside institution keeps on file.
+   *
+   * The MARGINS are small here, and deliberately so: the letterhead is drawn
+   * INSIDE the document — the logo and the contact strip are rendered by the
+   * print view, exactly as the source document carries them in its own header
+   * and footer parts. An earlier version of this rule reserved a 38.6mm top
+   * margin for letterhead that was assumed to be pre-printed on the paper.
+   * That was wrong about where the masthead comes from, and it would now push
+   * a logo we draw ourselves a third of the way down the page.
+   *
+   * A NAMED page, so this geometry reaches the letter and nothing else. `@page`
+   * cannot take a selector, and the letter and the logbook still disagree about
+   * MARGINS even now that they agree about paper — 14/20/12/20 here against a
+   * uniform 20mm above, because this document draws its own letterhead and the
+   * logbook does not. `page:` is the only mechanism that lets both be right.
+   */
+  @page orbit-letter {
+    size: A4;
+    margin: 14mm 20mm 12mm 20mm;
+  }
+
+  html,
+  body {
+    background: #ffffff;
+  }
+
+  body.orbit-printing #root {
+    display: none !important;
+  }
+
+  /* Fixed and scrollable on screen; static and full-length on paper, or the
+     print stops at whatever one viewport happened to hold. */
+  body.orbit-printing .orbit-print-root {
+    position: static;
+    overflow: visible;
+    height: auto;
+  }
+
+  .orbit-letter-page {
+    page: orbit-letter;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .orbit-letter-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+}

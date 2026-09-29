@@ -1,0 +1,45 @@
+{
+  /*
+   * The Convex backend — 30 modules, and until this file existed the only thing
+   * that ever typechecked them was `convex deploy` running on somebody's laptop.
+   * A type error in convex/ could reach main, and would only surface at the
+   * moment of deploying to production.
+   *
+   * Settings mirror tsconfig.app.json so the two halves of the codebase are held
+   * to one standard. `lib` drops DOM: Convex functions run in a V8 isolate with
+   * no window, no document and no browser fetch types, and including DOM here
+   * would let browser-only code compile and then fail at runtime.
+   */
+  "compilerOptions": {
+    "target": "ES2021",
+    /*
+     * DOM is here for the web-standard globals the Convex isolate genuinely
+     * implements — Request, Response, Headers, Blob and BlobPart, all of which
+     * convex/http.ts uses directly. It is what Convex's own tsconfig template
+     * ships. The cost is that `window` and `document` also typecheck; they do
+     * not exist at runtime, so treat a reference to either as a bug the compiler
+     * cannot catch for you.
+     */
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* convex/email.ts and convex/lib/* are 'use node' actions that import
+     * nodemailer and node:crypto. Without node types they do not resolve. */
+    "types": ["node"]
+  },
+  "include": ["convex"]
+}

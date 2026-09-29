@@ -1,0 +1,23 @@
+# Netlify redirect rules, shipped INSIDE the publish directory.
+#
+# These duplicate netlify.toml's [[redirects]] on purpose. netlify.toml is read
+# when Netlify BUILDS the site; it is not consulted for a deploy that uploads a
+# prebuilt directory through the API. This project deploys that way — the repo
+# is not the deploy source — so rules that live only in the toml simply do not
+# exist on the live site.
+#
+# The consequence was not subtle: without the SPA fallback below, every route
+# except "/" returned 404. Refreshing on /tasks, following a bookmark, or
+# arriving at /oauthredirect after signing in with Zoho all failed, while the
+# home page looked perfectly healthy.
+#
+# Order matters — the first match wins, so the catch-all must come last.
+
+# The calendar feed is proxied so subscribers see an iih.ng URL rather than a
+# Convex one, and so the origin can change without every subscription breaking.
+/api/calendar-ics  https://your-prod-deployment.eu-west-1.convex.site/calendar.ics  200!
+
+# SPA fallback. Every unmatched path serves the app shell and React Router
+# decides from there. Status 200, not 302: the browser must keep the requested
+# URL, or the router has nothing to route on.
+/*  /index.html  200
